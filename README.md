@@ -3,7 +3,7 @@
 
 一個建構於瀏覽器端的純前端互動式 SQL 學習與查詢平台。內建 SQLite WebAssembly 引擎、ERD 關聯圖顯示、數據視覺化與語法排錯助手。
 
-線上體驗網址：[https://KaLuwei.github.io/SQL-web-test-app/](https://KaLuwei.github.io/SQL-web-test-app/)
+線上體驗網址：[https://KaLuwei.github.io/SQL-web-test-app/sql.html](https://KaLuwei.github.io/SQL-web-test-app/sql.html)
 
 ---
 
