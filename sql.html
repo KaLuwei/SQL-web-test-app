@@ -1,0 +1,1603 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SQL 互動查詢學習工作站 (SQL Studio)</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts Inter & JetBrains Mono -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <!-- sql.js (WebAssembly SQLite) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.js"></script>
+    <!-- Chart.js for Data Visualization -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        brand: {
+                            50: '#f0f7ff',
+                            100: '#e0effe',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8',
+                            900: '#1e3a8a',
+                        },
+                        darkBg: '#0f172a',
+                        cardBg: '#1e293b',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1e293b;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #64748b;
+        }
+        .sql-editor {
+            font-family: 'JetBrains Mono', monospace;
+            tab-size: 4;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 font-sans min-h-screen flex flex-col antialiased">
+
+    <!-- Header Navigation -->
+    <header class="bg-slate-800/90 border-b border-slate-700 sticky top-0 z-50 backdrop-blur">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-16">
+            <div class="flex items-center space-x-3">
+                <div class="bg-blue-600 p-2 rounded-lg text-white shadow-lg shadow-blue-500/30">
+                    <i class="fa-solid font-bold fa-database text-xl"></i>
+                </div>
+                <div>
+                    <span class="font-bold text-lg text-white tracking-wide block leading-tight">SQL Studio</span>
+                    <span class="text-xs text-slate-400">電商門市數據分析與學習平台</span>
+                </div>
+            </div>
+
+            <!-- Nav Tabs -->
+            <nav class="hidden md:flex space-x-1 bg-slate-900/60 p-1.5 rounded-xl border border-slate-700/60 text-xs">
+                <button onclick="switchTab('background')" id="tab-btn-background" class="tab-btn px-3 py-1.5 rounded-lg font-medium transition-all text-blue-400 bg-slate-800 shadow">
+                    <i class="fa-solid fa-compass mr-1.5"></i>案例背景
+                </button>
+                <button onclick="switchTab('design')" id="tab-btn-design" class="tab-btn px-3 py-1.5 rounded-lg font-medium transition-all text-slate-400 hover:text-slate-200">
+                    <i class="fa-solid fa-sitemap mr-1.5"></i>資料庫設計 (ERD)
+                </button>
+                <button onclick="switchTab('workspace')" id="tab-btn-workspace" class="tab-btn px-3 py-1.5 rounded-lg font-medium transition-all text-slate-400 hover:text-slate-200">
+                    <i class="fa-solid fa-terminal mr-1.5"></i>SQL 工作站
+                </button>
+                <button onclick="switchTab('dataset-manager')" id="tab-btn-dataset-manager" class="tab-btn px-3 py-1.5 rounded-lg font-medium transition-all text-slate-400 hover:text-slate-200">
+                    <i class="fa-solid fa-folder-gear text-amber-400 mr-1.5"></i>資料集與 CSV 匯入
+                </button>
+                <button onclick="switchTab('builder')" id="tab-btn-builder" class="tab-btn px-3 py-1.5 rounded-lg font-medium transition-all text-slate-400 hover:text-slate-200">
+                    <i class="fa-solid fa-hammer mr-1.5"></i>建表與語法生成器
+                </button>
+                <button onclick="switchTab('comparison')" id="tab-btn-comparison" class="tab-btn px-3 py-1.5 rounded-lg font-medium transition-all text-slate-400 hover:text-slate-200">
+                    <i class="fa-solid fa-scale-balanced mr-1.5"></i>語法與結果比較
+                </button>
+            </nav>
+
+            <div class="flex items-center space-x-3">
+                <span id="db-status-badge" class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                    <span class="w-2 h-2 rounded-full bg-amber-400 mr-1.5 animate-pulse"></span>引擎載入中...
+                </span>
+                <button onclick="resetDatabase()" title="重置資料庫狀態" class="p-2 text-slate-400 hover:text-white bg-slate-700/50 hover:bg-slate-700 rounded-lg transition border border-slate-600/50">
+                    <i class="fa-solid fa-rotate"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Mobile Nav Bar -->
+        <div class="md:hidden flex border-t border-slate-700/50 overflow-x-auto p-2 space-x-2 bg-slate-800">
+            <button onclick="switchTab('background')" class="tab-btn-m text-xs px-3 py-1.5 rounded-lg whitespace-nowrap bg-blue-600 text-white">案例背景</button>
+            <button onclick="switchTab('design')" class="tab-btn-m text-xs px-3 py-1.5 rounded-lg whitespace-nowrap bg-slate-700 text-slate-300">資料庫設計</button>
+            <button onclick="switchTab('workspace')" class="tab-btn-m text-xs px-3 py-1.5 rounded-lg whitespace-nowrap bg-slate-700 text-slate-300">SQL 工作站</button>
+            <button onclick="switchTab('dataset-manager')" class="tab-btn-m text-xs px-3 py-1.5 rounded-lg whitespace-nowrap bg-slate-700 text-slate-300">資料集與 CSV</button>
+            <button onclick="switchTab('builder')" class="tab-btn-m text-xs px-3 py-1.5 rounded-lg whitespace-nowrap bg-slate-700 text-slate-300">建表生成器</button>
+            <button onclick="switchTab('comparison')" class="tab-btn-m text-xs px-3 py-1.5 rounded-lg whitespace-nowrap bg-slate-700 text-slate-300">語法與結果比較</button>
+        </div>
+    </header>
+
+    <!-- Main Content Containers -->
+    <main class="flex-grow max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8">
+
+        <!-- PART 1: BACKGROUND (案例背景) -->
+        <section id="sec-background" class="tab-content space-y-6">
+            <div class="bg-gradient-to-r from-blue-900/40 via-indigo-900/30 to-slate-800 p-8 rounded-2xl border border-blue-500/20 relative overflow-hidden shadow-xl">
+                <div class="absolute -right-10 -bottom-10 opacity-10 text-blue-400 pointer-events-none">
+                    <i class="fa-solid fa-store text-[220px]"></i>
+                </div>
+                <div class="max-w-3xl relative z-10">
+                    <span class="px-3 py-1 rounded-full text-xs font-semibold bg-blue-500/20 text-blue-300 border border-blue-400/30">專案模擬案例</span>
+                    <h1 class="text-3xl font-extrabold text-white mt-3 mb-4 tracking-tight">全通路 3C 電商營運與顧客行為分析資料庫</h1>
+                    <p class="text-slate-300 leading-relaxed text-base">
+                        本系統模擬一家中大型 3C 數位電商與實體門市整合的營運資料庫。提供營運團隊、行銷人員與數據分析師即時查詢訂單狀況、會員消費貢獻度及庫存告警。
+                    </p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- User Personas -->
+                <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 hover:border-slate-600 transition">
+                    <div class="w-12 h-12 bg-blue-500/10 text-blue-400 rounded-xl flex items-center justify-center text-xl mb-4 border border-blue-500/20">
+                        <i class="fa-solid fa-users"></i>
+                    </div>
+                    <h3 class="text-lg font-bold text-white mb-2">1. 使用對象 (Target Users)</h3>
+                    <ul class="text-sm text-slate-300 space-y-2 list-disc list-inside">
+                        <li><strong class="text-slate-200">數據分析師：</strong> 撰寫複雜報表，挖掘潛在高價值 VIP 客戶。</li>
+                        <li><strong class="text-slate-200">行銷營運團隊：</strong> 評估促銷活動銷售量，篩選符合忠誠度條件之會員。</li>
+                        <li><strong class="text-slate-200">庫存倉管主管：</strong> 監控庫存水平，預防熱銷產品缺貨。</li>
+                    </ul>
+                </div>
+
+                <!-- Business Problems -->
+                <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 hover:border-slate-600 transition">
+                    <div class="w-12 h-12 bg-emerald-500/10 text-emerald-400 rounded-xl flex items-center justify-center text-xl mb-4 border border-emerald-500/20">
+                        <i class="fa-solid fa-circle-exclamation"></i>
+                    </div>
+                    <h3 class="text-lg font-bold text-white mb-2">2. 核心解決問題</h3>
+                    <ul class="text-sm text-slate-300 space-y-2 list-disc list-inside">
+                        <li>過往跨部門無法即時串聯「會員等級」與「實際購買品項」。</li>
+                        <li>需要多表關聯（JOIN）才能精準算出一筆訂單的實收金額與商品明細。</li>
+                        <li>處理退貨/取消訂單對營收統計的干擾問題。</li>
+                    </ul>
+                </div>
+
+                <!-- Strategic Value -->
+                <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 hover:border-slate-600 transition">
+                    <div class="w-12 h-12 bg-purple-500/10 text-purple-400 rounded-xl flex items-center justify-center text-xl mb-4 border border-purple-500/20">
+                        <i class="fa-solid fa-chart-line"></i>
+                    </div>
+                    <h3 class="text-lg font-bold text-white mb-2">3. SQL 應用預期效益</h3>
+                    <ul class="text-sm text-slate-300 space-y-2 list-disc list-inside">
+                        <li>透過多表關聯 (<code class="text-purple-300 font-mono">JOIN</code>) 匯整顧客購物全貌。</li>
+                        <li>利用分組聚合 (<code class="text-purple-300 font-mono">GROUP BY / HAVING</code>) 自動篩選大客戶。</li>
+                        <li>實作欄位條件過濾 (<code class="text-purple-300 font-mono">WHERE / CASE</code>) 計算淨銷售額。</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Quick Start Call To Action -->
+            <div class="bg-slate-800/80 p-6 rounded-xl border border-slate-700 flex flex-col md:flex-row items-center justify-between gap-4">
+                <div class="flex items-center space-x-4">
+                    <div class="p-3 bg-amber-500/10 text-amber-400 rounded-lg">
+                        <i class="fa-solid fa-lightbulb text-2xl"></i>
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-white">準備好嘗試操作了嗎？</h4>
+                        <p class="text-sm text-slate-400">您可以先查看資料庫設計結構，或直接進入 SQL 工作站執行查詢。</p>
+                    </div>
+                </div>
+                <div class="flex space-x-3 w-full md:w-auto">
+                    <button onclick="switchTab('design')" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm font-medium transition w-1/2 md:w-auto">查看 ERD 圖資</button>
+                    <button onclick="switchTab('workspace')" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium transition w-1/2 md:w-auto">前往 SQL 工作站</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- PART 2: DATABASE DESIGN (資料庫設計) -->
+        <section id="sec-design" class="tab-content hidden space-y-6">
+            <!-- ERD Diagram Section -->
+            <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-lg">
+                <div class="flex justify-between items-center mb-6 flex-wrap gap-2">
+                    <div>
+                        <h2 class="text-xl font-bold text-white"><i class="fa-solid fa-diagram-project text-blue-400 mr-2"></i>實體關聯圖 (ERD Diagram)</h2>
+                        <p class="text-slate-400 text-sm mt-1">清晰展現 4 張核心資料表間的主鍵 (PK)、外鍵 (FK) 與 1:N 走向。</p>
+                    </div>
+                    <div class="flex items-center space-x-4 text-xs font-mono">
+                        <span class="flex items-center text-amber-300"><span class="w-2.5 h-2.5 bg-amber-400 rounded-full mr-1.5"></span>PK (主鍵)</span>
+                        <span class="flex items-center text-cyan-300"><span class="w-2.5 h-2.5 bg-cyan-400 rounded-full mr-1.5"></span>FK (外鍵)</span>
+                    </div>
+                </div>
+
+                <!-- Clean Flow Diagram without Text Overlap -->
+                <div class="bg-slate-900 p-6 rounded-xl border border-slate-700/80 overflow-x-auto">
+                    <div class="min-w-[980px] space-y-4">
+                        
+                        <!-- Header Step Indicators -->
+                        <div class="grid grid-cols-7 gap-2 text-center text-xs font-semibold text-slate-400 border-b border-slate-800 pb-2">
+                            <div class="col-span-1">1. 會員主檔 (users)</div>
+                            <div class="col-span-1">關聯 A</div>
+                            <div class="col-span-1">2. 訂單交易 (orders)</div>
+                            <div class="col-span-1">關聯 B</div>
+                            <div class="col-span-1">3. 交易明細 (order_items)</div>
+                            <div class="col-span-1">關聯 C</div>
+                            <div class="col-span-1">4. 商品目錄 (products)</div>
+                        </div>
+
+                        <!-- Entity Cards with Connectors -->
+                        <div class="grid grid-cols-7 gap-2 items-center">
+                            
+                            <!-- Table 1: users -->
+                            <div class="col-span-1 bg-slate-800 border border-blue-500/70 rounded-xl overflow-hidden shadow-lg">
+                                <div class="bg-blue-600/30 px-3 py-2 border-b border-blue-500/40 flex justify-between items-center">
+                                    <span class="font-bold text-xs text-blue-200 font-mono"><i class="fa-solid fa-user-tag mr-1"></i>users</span>
+                                    <span class="text-[9px] bg-blue-500/30 text-blue-200 px-1 py-0.5 rounded whitespace-nowrap">1 (父表)</span>
+                                </div>
+                                <div class="p-2.5 text-xs space-y-1.5 font-mono">
+                                    <div class="bg-amber-500/10 text-amber-300 font-bold p-1 rounded flex justify-between items-center border border-amber-500/20 text-[11px]">
+                                        <span>🔑 user_id</span>
+                                        <span class="text-[9px] text-amber-400">PK</span>
+                                    </div>
+                                    <div class="text-slate-300 px-1 text-[11px]">username</div>
+                                    <div class="text-slate-300 px-1 text-[11px]">email</div>
+                                    <div class="text-slate-300 px-1 text-[11px]">member_level</div>
+                                    <div class="text-slate-400 text-[10px] px-1 pt-1 border-t border-slate-700/60">created_at</div>
+                                </div>
+                            </div>
+
+                            <!-- Integrated Connector A -->
+                            <div class="col-span-1 flex flex-col items-center justify-center p-1 bg-slate-950/60 border border-slate-800 rounded-lg">
+                                <span class="text-[10px] text-amber-300 font-mono font-bold bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20 mb-1">1 : N</span>
+                                <div class="w-full h-0.5 bg-gradient-to-r from-blue-500 to-indigo-500 my-1 relative flex items-center justify-center">
+                                    <i class="fa-solid fa-angle-right text-indigo-400 absolute right-0"></i>
+                                </div>
+                                <span class="text-[9px] text-cyan-300 font-mono bg-cyan-950 px-1.5 py-0.5 rounded border border-cyan-800">user_id (FK)</span>
+                            </div>
+
+                            <!-- Table 2: orders -->
+                            <div class="col-span-1 bg-slate-800 border border-indigo-500/70 rounded-xl overflow-hidden shadow-lg">
+                                <div class="bg-indigo-600/30 px-3 py-2 border-b border-indigo-500/40 flex justify-between items-center">
+                                    <span class="font-bold text-xs text-indigo-200 font-mono"><i class="fa-solid fa-receipt mr-1"></i>orders</span>
+                                    <span class="text-[9px] bg-indigo-500/30 text-indigo-200 px-1 py-0.5 rounded whitespace-nowrap">N/1</span>
+                                </div>
+                                <div class="p-2.5 text-xs space-y-1.5 font-mono">
+                                    <div class="bg-amber-500/10 text-amber-300 font-bold p-1 rounded flex justify-between items-center border border-amber-500/20 text-[11px]">
+                                        <span>🔑 order_id</span>
+                                        <span class="text-[9px] text-amber-400">PK</span>
+                                    </div>
+                                    <div class="bg-cyan-500/10 text-cyan-300 font-semibold p-1 rounded flex justify-between items-center border border-cyan-500/20 text-[11px]">
+                                        <span>🔗 user_id</span>
+                                        <span class="text-[9px] text-cyan-400">FK</span>
+                                    </div>
+                                    <div class="text-slate-300 px-1 text-[11px]">order_date</div>
+                                    <div class="text-slate-300 px-1 text-[11px]">status</div>
+                                    <div class="text-slate-400 text-[10px] px-1 pt-1 border-t border-slate-700/60">total_amount</div>
+                                </div>
+                            </div>
+
+                            <!-- Integrated Connector B -->
+                            <div class="col-span-1 flex flex-col items-center justify-center p-1 bg-slate-950/60 border border-slate-800 rounded-lg">
+                                <span class="text-[10px] text-amber-300 font-mono font-bold bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20 mb-1">1 : N</span>
+                                <div class="w-full h-0.5 bg-gradient-to-r from-indigo-500 to-emerald-500 my-1 relative flex items-center justify-center">
+                                    <i class="fa-solid fa-angle-right text-emerald-400 absolute right-0"></i>
+                                </div>
+                                <span class="text-[9px] text-cyan-300 font-mono bg-cyan-950 px-1.5 py-0.5 rounded border border-cyan-800">order_id (FK)</span>
+                            </div>
+
+                            <!-- Table 3: order_items -->
+                            <div class="col-span-1 bg-slate-800 border border-emerald-500/70 rounded-xl overflow-hidden shadow-lg">
+                                <div class="bg-emerald-600/30 px-3 py-2 border-b border-emerald-500/40 flex justify-between items-center">
+                                    <span class="font-bold text-xs text-emerald-200 font-mono"><i class="fa-solid fa-list-check mr-1"></i>order_items</span>
+                                    <span class="text-[9px] bg-emerald-500/30 text-emerald-200 px-1.5 py-0.5 rounded whitespace-nowrap">N (明細)</span>
+                                </div>
+                                <div class="p-2.5 text-xs space-y-1.5 font-mono">
+                                    <div class="bg-amber-500/10 text-amber-300 font-bold p-1 rounded flex justify-between items-center border border-amber-500/20 text-[11px]">
+                                        <span>🔑 item_id</span>
+                                        <span class="text-[9px] text-amber-400">PK</span>
+                                    </div>
+                                    <div class="bg-cyan-500/10 text-cyan-300 font-semibold p-1 rounded flex justify-between items-center border border-cyan-500/20 text-[11px]">
+                                        <span>🔗 order_id</span>
+                                        <span class="text-[9px] text-cyan-400">FK</span>
+                                    </div>
+                                    <div class="bg-cyan-500/10 text-cyan-300 font-semibold p-1 rounded flex justify-between items-center border border-cyan-500/20 text-[11px]">
+                                        <span>🔗 product_id</span>
+                                        <span class="text-[9px] text-cyan-400">FK</span>
+                                    </div>
+                                    <div class="text-slate-300 px-1 text-[11px]">quantity</div>
+                                    <div class="text-slate-400 text-[10px] px-1 pt-1 border-t border-slate-700/60">unit_price</div>
+                                </div>
+                            </div>
+
+                            <!-- Integrated Connector C -->
+                            <div class="col-span-1 flex flex-col items-center justify-center p-1 bg-slate-950/60 border border-slate-800 rounded-lg">
+                                <span class="text-[10px] text-amber-300 font-mono font-bold bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20 mb-1">N : 1</span>
+                                <div class="w-full h-0.5 bg-gradient-to-r from-emerald-500 to-purple-500 my-1 relative flex items-center justify-center">
+                                    <i class="fa-solid fa-angle-left text-emerald-400 absolute left-0"></i>
+                                </div>
+                                <span class="text-[9px] text-cyan-300 font-mono bg-cyan-950 px-1.5 py-0.5 rounded border border-cyan-800">product_id (FK)</span>
+                            </div>
+
+                            <!-- Table 4: products -->
+                            <div class="col-span-1 bg-slate-800 border border-purple-500/70 rounded-xl overflow-hidden shadow-lg">
+                                <div class="bg-purple-600/30 px-3 py-2 border-b border-purple-500/40 flex justify-between items-center">
+                                    <span class="font-bold text-xs text-purple-200 font-mono"><i class="fa-solid fa-box-archive mr-1"></i>products</span>
+                                    <span class="text-[9px] bg-purple-500/30 text-purple-200 px-1 py-0.5 rounded whitespace-nowrap">1 (父表)</span>
+                                </div>
+                                <div class="p-2.5 text-xs space-y-1.5 font-mono">
+                                    <div class="bg-amber-500/10 text-amber-300 font-bold p-1 rounded flex justify-between items-center border border-amber-500/20 text-[11px]">
+                                        <span>🔑 product_id</span>
+                                        <span class="text-[9px] text-amber-400">PK</span>
+                                    </div>
+                                    <div class="text-slate-300 px-1 text-[11px]">product_name</div>
+                                    <div class="text-slate-300 px-1 text-[11px]">category</div>
+                                    <div class="text-slate-300 px-1 text-[11px]">price</div>
+                                    <div class="text-slate-400 text-[10px] px-1 pt-1 border-t border-slate-700/60">stock_quantity</div>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Field Schema Overview -->
+            <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700">
+                <h3 class="text-lg font-bold text-white mb-4"><i class="fa-solid fa-table text-blue-400 mr-2"></i>資料表欄位對照清單 (Data Schema)</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-mono">
+                    <div class="bg-slate-900 p-4 rounded-xl border border-slate-700 space-y-2">
+                        <div class="font-bold text-blue-400 text-sm border-b border-slate-800 pb-2">users (會員資料表)</div>
+                        <div class="text-slate-300"><span class="text-amber-400 font-bold">user_id:</span> INT PRIMARY KEY (會員唯一識別碼)</div>
+                        <div class="text-slate-300"><span class="text-slate-200 font-bold">username:</span> TEXT (會員姓名)</div>
+                        <div class="text-slate-300"><span class="text-slate-200 font-bold">email:</span> TEXT (電子郵件信箱)</div>
+                        <div class="text-slate-300"><span class="text-slate-200 font-bold">member_level:</span> TEXT ('Regular', 'Gold', 'VIP')</div>
+                        <div class="text-slate-400"><span class="text-slate-400 font-bold">created_at:</span> DATE (帳號註冊日期)</div>
+                    </div>
+                    <div class="bg-slate-900 p-4 rounded-xl border border-slate-700 space-y-2">
+                        <div class="font-bold text-indigo-400 text-sm border-b border-slate-800 pb-2">orders (訂單總表)</div>
+                        <div class="text-slate-300"><span class="text-amber-400 font-bold">order_id:</span> INT PRIMARY KEY (訂單編號)</div>
+                        <div class="text-slate-300"><span class="text-cyan-400 font-bold">user_id:</span> INT FOREIGN KEY (下單會員編號)</div>
+                        <div class="text-slate-300"><span class="text-slate-200 font-bold">order_date:</span> DATE (下單日期)</div>
+                        <div class="text-slate-300"><span class="text-slate-200 font-bold">status:</span> TEXT ('Completed', 'Pending', 'Cancelled')</div>
+                        <div class="text-slate-400"><span class="text-slate-400 font-bold">total_amount:</span> REAL (訂單總實收金額)</div>
+                    </div>
+                    <div class="bg-slate-900 p-4 rounded-xl border border-slate-700 space-y-2">
+                        <div class="font-bold text-emerald-400 text-sm border-b border-slate-800 pb-2">order_items (訂單細項關聯表)</div>
+                        <div class="text-slate-300"><span class="text-amber-400 font-bold">item_id:</span> INT PRIMARY KEY (明細流水號)</div>
+                        <div class="text-slate-300"><span class="text-cyan-400 font-bold">order_id:</span> INT FOREIGN KEY (所屬訂單編號)</div>
+                        <div class="text-slate-300"><span class="text-cyan-400 font-bold">product_id:</span> INT FOREIGN KEY (購買商品編號)</div>
+                        <div class="text-slate-300"><span class="text-slate-200 font-bold">quantity:</span> INT (購買數量)</div>
+                        <div class="text-slate-400"><span class="text-slate-400 font-bold">unit_price:</span> REAL (當時成交單價)</div>
+                    </div>
+                    <div class="bg-slate-900 p-4 rounded-xl border border-slate-700 space-y-2">
+                        <div class="font-bold text-purple-400 text-sm border-b border-slate-800 pb-2">products (商品目錄表)</div>
+                        <div class="text-slate-300"><span class="text-amber-400 font-bold">product_id:</span> INT PRIMARY KEY (商品編號)</div>
+                        <div class="text-slate-300"><span class="text-slate-200 font-bold">product_name:</span> TEXT (商品品名)</div>
+                        <div class="text-slate-300"><span class="text-slate-200 font-bold">category:</span> TEXT (商品分類類別)</div>
+                        <div class="text-slate-300"><span class="text-slate-200 font-bold">price:</span> REAL (商品定價)</div>
+                        <div class="text-slate-400"><span class="text-slate-400 font-bold">stock_quantity:</span> INT (目前門市倉庫庫存量)</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- PART 3: DATASET MANAGER & CSV IMPORTER -->
+        <section id="sec-dataset-manager" class="tab-content hidden space-y-6">
+            <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700">
+                <div class="mb-6">
+                    <span class="px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/20 text-amber-300 border border-amber-400/30">自訂數據管理</span>
+                    <h2 class="text-xl font-bold text-white mt-2"><i class="fa-solid fa-database text-amber-400 mr-2"></i>資料集主題切換與自訂 CSV 數據匯入</h2>
+                    <p class="text-slate-400 text-sm mt-1">您可以切換內建的商業主題資料庫，或是直接上傳自訂 CSV 檔案建立專屬資料表進行 SQL 分析。</p>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <!-- Option 1: Preset Datasets -->
+                    <div class="bg-slate-900 p-5 rounded-xl border border-slate-700 space-y-4 flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center justify-between mb-2">
+                                <h3 class="font-bold text-white text-base text-blue-400"><i class="fa-solid fa-layer-group mr-2"></i>1. 切換內建主題資料集</h3>
+                            </div>
+                            <p class="text-xs text-slate-400 mb-4">點擊下方按鈕即可載入不同行業領域的真實模擬資料表結構：</p>
+                            
+                            <div class="space-y-3">
+                                <button onclick="loadBuiltinDataset('ecommerce')" class="w-full text-left p-3 rounded-xl bg-slate-800 hover:bg-slate-700/90 border border-blue-500/40 transition group">
+                                    <div class="flex justify-between items-center">
+                                        <span class="font-bold text-xs text-blue-300"><i class="fa-solid fa-cart-shopping mr-1.5"></i>3C 電商營運與顧客行為</span>
+                                        <span class="text-[10px] bg-blue-500/20 text-blue-300 px-2 py-0.5 rounded">4 張資料表</span>
+                                    </div>
+                                    <div class="text-slate-400 text-[11px] mt-1">包含 users, orders, products, order_items</div>
+                                </button>
+
+                                <button onclick="loadBuiltinDataset('saas')" class="w-full text-left p-3 rounded-xl bg-slate-800 hover:bg-slate-700/90 border border-slate-700 transition group">
+                                    <div class="flex justify-between items-center">
+                                        <span class="font-bold text-xs text-emerald-300"><i class="fa-solid fa-cloud-arrow-up mr-1.5"></i>SaaS 雲端訂閱服務數據</span>
+                                        <span class="text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded">3 張資料表</span>
+                                    </div>
+                                    <div class="text-slate-400 text-[11px] mt-1">包含 subscribers, plans, subscriptions</div>
+                                </button>
+
+                                <button onclick="loadBuiltinDataset('food_delivery')" class="w-full text-left p-3 rounded-xl bg-slate-800 hover:bg-slate-700/90 border border-slate-700 transition group">
+                                    <div class="flex justify-between items-center">
+                                        <span class="font-bold text-xs text-purple-300"><i class="fa-solid fa-utensils mr-1.5"></i>美食外送平台與門市派單</span>
+                                        <span class="text-[10px] bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded">3 張資料表</span>
+                                    </div>
+                                    <div class="text-slate-400 text-[11px] mt-1">包含 restaurants, drivers, deliveries</div>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Option 2: Custom CSV Auto Importer -->
+                    <div class="bg-slate-900 p-5 rounded-xl border border-slate-700 space-y-4 flex flex-col justify-between">
+                        <div>
+                            <h3 class="font-bold text-white text-base text-amber-400 mb-2"><i class="fa-solid fa-file-csv mr-2"></i>2. 上傳 CSV 檔案建表</h3>
+                            <p class="text-xs text-slate-400 mb-3">自動解析標頭 (Header) 與型態，直接在瀏覽器記憶體中生成新 table：</p>
+                            
+                            <div class="space-y-3">
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-300 mb-1">自訂資料表名稱 (Table Name)</label>
+                                    <input type="text" id="csv-table-name" placeholder="例如：my_sales_data" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs font-mono text-white focus:outline-none focus:border-amber-500">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-300 mb-1">選擇 CSV 檔案</label>
+                                    <input type="file" id="csv-file-input" accept=".csv" class="w-full text-xs text-slate-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-slate-800 file:text-amber-300 hover:file:bg-slate-700 cursor-pointer">
+                                </div>
+                            </div>
+                        </div>
+
+                        <button onclick="importCSVToSQLite()" class="w-full py-2 bg-amber-600 hover:bg-amber-500 text-white font-semibold text-xs rounded-lg transition mt-4">
+                            <i class="fa-solid fa-file-import mr-1"></i>開始匯入並建立資料表
+                        </button>
+                    </div>
+
+                    <!-- Option 3: Synthetic Data Generator & Backup -->
+                    <div class="bg-slate-900 p-5 rounded-xl border border-slate-700 space-y-4 flex flex-col justify-between">
+                        <div>
+                            <h3 class="font-bold text-white text-base text-cyan-400 mb-2"><i class="fa-solid fa-bolt mr-2"></i>3. 生成測試資料與 SQL 導出</h3>
+                            <p class="text-xs text-slate-400 mb-4">補充大量隨機資料以測試 SQL 大數據查詢效能，或將目前資料庫導出為 SQL 檔案：</p>
+                            
+                            <div class="space-y-3">
+                                <div class="p-3 bg-slate-950 rounded-lg border border-slate-800 space-y-2">
+                                    <div class="text-xs font-semibold text-slate-200">一鍵生成模擬數據</div>
+                                    <button onclick="generateSyntheticData()" class="w-full py-1.5 bg-slate-800 hover:bg-slate-700 text-cyan-300 text-xs rounded font-mono transition border border-cyan-500/30">
+                                        <i class="fa-solid fa-plus-circle mr-1"></i>為目前資料表注入模擬數據
+                                    </button>
+                                </div>
+
+                                <div class="p-3 bg-slate-950 rounded-lg border border-slate-800 space-y-2">
+                                    <div class="text-xs font-semibold text-slate-200">備份與導出</div>
+                                    <button onclick="exportFullDatabaseSQL()" class="w-full py-1.5 bg-slate-800 hover:bg-slate-700 text-emerald-300 text-xs rounded font-mono transition border border-emerald-500/30">
+                                        <i class="fa-solid fa-download mr-1"></i>導出完整 SQL DDL/DML 檔案
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="text-[11px] text-slate-500 italic text-center">
+                            * 所有資料處理皆在您的瀏覽器記憶體中執行，不會傳送至外部伺服器。
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- PART 4: INTERACTIVE WORKSPACE (SQL 工作站) -->
+        <section id="sec-workspace" class="tab-content hidden space-y-6">
+            
+            <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                <!-- Sidebar: Presets, History & Schema -->
+                <div class="lg:col-span-1 space-y-6">
+                    <!-- Presets -->
+                    <div class="bg-slate-800 p-4 rounded-2xl border border-slate-700">
+                        <h3 class="font-bold text-white text-sm mb-3 flex items-center justify-between">
+                            <span><i class="fa-solid fa-wand-magic-sparkles text-amber-400 mr-2"></i>預設查詢情境</span>
+                            <span class="text-[10px] bg-slate-700 text-amber-300 px-2 py-0.5 rounded-full font-mono">8 款</span>
+                        </h3>
+                        <div class="space-y-2 max-h-[260px] overflow-y-auto pr-1">
+                            <button onclick="loadPreset(1)" class="w-full text-left p-2 rounded-lg bg-slate-900/60 hover:bg-slate-700/80 border border-slate-700 text-xs transition group">
+                                <div class="font-semibold text-blue-300 group-hover:text-blue-200">1. VIP 會員消費總額統計</div>
+                                <div class="text-slate-400 text-[10px] truncate">GROUP BY & HAVING</div>
+                            </button>
+                            <button onclick="loadPreset(2)" class="w-full text-left p-2 rounded-lg bg-slate-900/60 hover:bg-slate-700/80 border border-slate-700 text-xs transition group">
+                                <div class="font-semibold text-emerald-300 group-hover:text-emerald-200">2. 跨表商品銷售排行榜</div>
+                                <div class="text-slate-400 text-[10px] truncate">3 表 JOIN 聚合銷售額</div>
+                            </button>
+                            <button onclick="loadPreset(3)" class="w-full text-left p-2 rounded-lg bg-slate-900/60 hover:bg-slate-700/80 border border-slate-700 text-xs transition group">
+                                <div class="font-semibold text-purple-300 group-hover:text-purple-200">3. 低庫存警示與備貨清單</div>
+                                <div class="text-slate-400 text-[10px] truncate">WHERE 條件與數量排序</div>
+                            </button>
+                            <button onclick="loadPreset(4)" class="w-full text-left p-2 rounded-lg bg-slate-900/60 hover:bg-slate-700/80 border border-slate-700 text-xs transition group">
+                                <div class="font-semibold text-amber-300 group-hover:text-amber-200">4. 零消費新會員篩選</div>
+                                <div class="text-slate-400 text-[10px] truncate">LEFT JOIN 比對 NULL</div>
+                            </button>
+                            <button onclick="loadPreset(5)" class="w-full text-left p-2 rounded-lg bg-slate-900/60 hover:bg-slate-700/80 border border-slate-700 text-xs transition group">
+                                <div class="font-semibold text-cyan-300 group-hover:text-cyan-200">5. 顧客客單價 (AOV) 分析</div>
+                                <div class="text-slate-400 text-[10px] truncate">AVG() 聚合與 ROUND</div>
+                            </button>
+                            <button onclick="loadPreset(6)" class="w-full text-left p-2 rounded-lg bg-slate-900/60 hover:bg-slate-700/80 border border-slate-700 text-xs transition group">
+                                <div class="font-semibold text-pink-300 group-hover:text-pink-200">6. 訂單金額階層標籤</div>
+                                <div class="text-slate-400 text-[10px] truncate">CASE WHEN 邏輯切換</div>
+                            </button>
+                            <button onclick="loadPreset(7)" class="w-full text-left p-2 rounded-lg bg-slate-900/60 hover:bg-slate-700/80 border border-slate-700 text-xs transition group">
+                                <div class="font-semibold text-orange-300 group-hover:text-orange-200">7. 各類別商品平均售價</div>
+                                <div class="text-slate-400 text-[10px] truncate">COUNT() 與 AVG() 分組</div>
+                            </button>
+                            <button onclick="loadPreset(8)" class="w-full text-left p-2 rounded-lg bg-slate-900/60 hover:bg-slate-700/80 border border-slate-700 text-xs transition group">
+                                <div class="font-semibold text-rose-300 group-hover:text-rose-200">8. 4 表全聯結完整交易軌跡</div>
+                                <div class="text-slate-400 text-[10px] truncate">全聯結串聯細節</div>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Query History Log -->
+                    <div class="bg-slate-800 p-4 rounded-2xl border border-slate-700">
+                        <h3 class="font-bold text-white text-sm mb-2 flex items-center justify-between">
+                            <span><i class="fa-solid fa-clock-rotate-left text-cyan-400 mr-2"></i>查詢歷史紀錄</span>
+                            <button onclick="clearHistory()" class="text-[10px] text-slate-400 hover:text-slate-200">清空</button>
+                        </h3>
+                        <div id="history-list" class="space-y-1.5 max-h-[160px] overflow-y-auto text-xs font-mono">
+                            <div class="text-slate-500 text-[11px] italic p-1">尚無執行紀錄</div>
+                        </div>
+                    </div>
+
+                    <!-- Schema Tree -->
+                    <div class="bg-slate-800 p-4 rounded-2xl border border-slate-700">
+                        <h3 class="font-bold text-white text-sm mb-3 flex items-center justify-between">
+                            <span><i class="fa-solid fa-cubes text-blue-400 mr-2"></i>資料表架構樹</span>
+                            <span class="text-[10px] text-slate-400 font-mono">SQLite</span>
+                        </h3>
+                        <div id="schema-tree" class="space-y-2 text-slate-300">
+                            <div class="text-xs text-slate-500 italic">載入架構中...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Main SQL Editor & Visual Results -->
+                <div class="lg:col-span-3 space-y-4">
+                    <!-- Editor Card -->
+                    <div class="bg-slate-800 rounded-2xl border border-slate-700 overflow-hidden shadow-xl">
+                        <!-- Toolbar -->
+                        <div class="bg-slate-800/90 px-4 py-3 border-b border-slate-700 flex flex-wrap items-center justify-between gap-2">
+                            <div class="flex items-center space-x-2">
+                                <span class="w-3 h-3 rounded-full bg-red-500 inline-block"></span>
+                                <span class="w-3 h-3 rounded-full bg-amber-500 inline-block"></span>
+                                <span class="w-3 h-3 rounded-full bg-emerald-500 inline-block"></span>
+                                <span class="text-xs font-mono text-slate-400 ml-2">SQL_Studio_Editor.sql</span>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <button onclick="clearEditor()" class="px-3 py-1.5 text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg transition">
+                                    <i class="fa-solid fa-eraser mr-1"></i>清空
+                                </button>
+                                <button onclick="executeSQL()" class="px-4 py-1.5 text-xs bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg shadow-lg shadow-blue-600/30 transition flex items-center">
+                                    <i class="fa-solid fa-play mr-1.5"></i>執行查詢 (Ctrl+Enter)
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Code Area -->
+                        <div class="relative bg-slate-950">
+                            <textarea id="sql-input" class="w-full h-44 p-4 bg-slate-950 text-slate-100 font-mono text-sm leading-relaxed focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y" placeholder="請在此輸入 SQL 語法... (例如 SELECT * FROM users;)"></textarea>
+                        </div>
+                    </div>
+
+                    <!-- Execution Results -->
+                    <div class="bg-slate-800 rounded-2xl border border-slate-700 overflow-hidden shadow-xl flex flex-col min-h-[350px]">
+                        <!-- Results Header & View Toggle -->
+                        <div class="bg-slate-800/90 px-4 py-3 border-b border-slate-700 flex flex-wrap items-center justify-between gap-2">
+                            <div class="flex items-center space-x-3">
+                                <h3 class="font-bold text-white text-sm"><i class="fa-solid fa-table-cells text-emerald-400 mr-2"></i>執行結果 (Query Results)</h3>
+                                <span id="execution-stats" class="text-xs text-slate-400">準備就緒</span>
+                            </div>
+                            
+                            <!-- Toggle Buttons (Table vs Chart) -->
+                            <div class="flex items-center space-x-2">
+                                <div id="view-toggle-group" class="hidden bg-slate-900 p-1 rounded-lg border border-slate-700 flex text-xs">
+                                    <button onclick="toggleResultView('table')" id="btn-view-table" class="px-3 py-1 rounded bg-blue-600 text-white font-medium transition">
+                                        <i class="fa-solid fa-table mr-1"></i>表格
+                                    </button>
+                                    <button onclick="toggleResultView('chart')" id="btn-view-chart" class="px-3 py-1 rounded text-slate-400 hover:text-slate-200 font-medium transition">
+                                        <i class="fa-solid fa-chart-column mr-1"></i>數據圖表
+                                    </button>
+                                </div>
+                                <button id="export-csv-btn" onclick="exportCSV()" class="hidden px-3 py-1 text-xs bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg transition">
+                                    <i class="fa-solid fa-download mr-1"></i>匯出 CSV
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Results Content -->
+                        <div class="p-4 flex-grow overflow-x-auto bg-slate-900/50 relative">
+                            <!-- Initial Welcome Placeholder -->
+                            <div id="result-placeholder" class="h-full min-h-[220px] flex flex-col items-center justify-center text-slate-500">
+                                <i class="fa-solid fa-terminal text-4xl mb-3 text-slate-600"></i>
+                                <p class="text-sm">在上方輸入 SQL 或點選預設情境，點擊「執行查詢」即可查看結果。</p>
+                            </div>
+
+                            <!-- Smart Linter Error Alert Box -->
+                            <div id="error-message-box" class="hidden p-4 bg-red-950/70 border border-red-500/50 rounded-xl text-red-200 text-sm space-y-3">
+                                <div class="flex items-center font-bold text-red-400">
+                                    <i class="fa-solid fa-triangle-exclamation mr-2 text-lg"></i>SQL 執行錯誤 (Execution Error)
+                                </div>
+                                <div id="error-text" class="text-xs font-mono leading-relaxed text-red-300 bg-slate-950/60 p-2.5 rounded border border-red-900/50"></div>
+                                <!-- Smart Hint Box -->
+                                <div id="smart-hint-box" class="bg-amber-950/40 border border-amber-500/30 p-3 rounded-lg text-amber-200 text-xs space-y-1">
+                                    <div class="font-bold text-amber-400 flex items-center">
+                                        <i class="fa-solid fa-lightbulb mr-1.5"></i>智能排錯建議助手：
+                                    </div>
+                                    <div id="smart-hint-text" class="text-amber-200/90 leading-relaxed"></div>
+                                </div>
+                            </div>
+
+                            <!-- View 1: Table Result -->
+                            <div id="table-container" class="hidden overflow-x-auto">
+                                <table class="w-full text-left text-xs border-collapse font-mono">
+                                    <thead id="result-table-head" class="bg-slate-800 text-blue-300 border-b border-slate-700 sticky top-0"></thead>
+                                    <tbody id="result-table-body" class="divide-y divide-slate-800 text-slate-200"></tbody>
+                                </table>
+                            </div>
+
+                            <!-- View 2: Chart Result Container -->
+                            <div id="chart-container" class="hidden min-h-[280px] p-2 flex flex-col items-center justify-center">
+                                <div class="w-full max-w-2xl h-[260px] relative">
+                                    <canvas id="resultChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- PART 5: BUILDER & SQL GENERATOR TAB -->
+        <section id="sec-builder" class="tab-content hidden space-y-6">
+            <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700">
+                <div class="mb-6">
+                    <span class="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">開發工具</span>
+                    <h2 class="text-xl font-bold text-white mt-2"><i class="fa-solid fa-hammer text-emerald-400 mr-2"></i>視覺化 SQL 語法生成器與自訂建表</h2>
+                    <p class="text-slate-400 text-sm mt-1">免去死記 DDL / DML 語法，透過視覺化表單快速建立新資料表或生成常用的 `INSERT` / `SELECT` 語法。</p>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <!-- Dynamic Table Creator -->
+                    <div class="bg-slate-900 p-5 rounded-xl border border-slate-700 space-y-4">
+                        <h3 class="font-bold text-white text-base flex items-center text-blue-400">
+                            <i class="fa-solid fa-table-columns mr-2"></i>1. 視覺化自訂建表 (CREATE TABLE)
+                        </h3>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-300 mb-1">新資料表名稱 (Table Name)</label>
+                            <input type="text" id="builder-table-name" value="suppliers" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs font-mono text-white focus:outline-none focus:border-blue-500">
+                        </div>
+                        <div class="space-y-2">
+                            <label class="block text-xs font-medium text-slate-300">資料欄位設定 (Columns)</label>
+                            <div id="column-rows-container" class="space-y-2">
+                                <div class="flex space-x-2">
+                                    <input type="text" value="supplier_id" class="col-name w-1/3 bg-slate-950 border border-slate-700 rounded p-1.5 text-xs font-mono text-amber-300" placeholder="欄位名">
+                                    <select class="col-type w-1/3 bg-slate-950 border border-slate-700 rounded p-1.5 text-xs text-slate-300">
+                                        <option value="INTEGER PRIMARY KEY AUTOINCREMENT">INT (PK 自動遞增)</option>
+                                        <option value="TEXT">TEXT (文字)</option>
+                                        <option value="REAL">REAL (浮點數)</option>
+                                    </select>
+                                    <input type="text" value="供應商ID" class="col-desc w-1/3 bg-slate-950 border border-slate-700 rounded p-1.5 text-xs text-slate-400" placeholder="說明">
+                                </div>
+                                <div class="flex space-x-2">
+                                    <input type="text" value="supplier_name" class="col-name w-1/3 bg-slate-950 border border-slate-700 rounded p-1.5 text-xs font-mono text-slate-200" placeholder="欄位名">
+                                    <select class="col-type w-1/3 bg-slate-950 border border-slate-700 rounded p-1.5 text-xs text-slate-300">
+                                        <option value="TEXT">TEXT (文字)</option>
+                                        <option value="INTEGER">INTEGER (整數)</option>
+                                        <option value="REAL">REAL (浮點數)</option>
+                                    </select>
+                                    <input type="text" value="廠商名稱" class="col-desc w-1/3 bg-slate-950 border border-slate-700 rounded p-1.5 text-xs text-slate-400" placeholder="說明">
+                                </div>
+                            </div>
+                        </div>
+                        <button onclick="generateCreateTableSQL()" class="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs rounded-lg transition">
+                            <i class="fa-solid fa-code mr-1"></i>生成建表 SQL 並發送至工作站
+                        </button>
+                    </div>
+
+                    <!-- Quick Template Snippets -->
+                    <div class="bg-slate-900 p-5 rounded-xl border border-slate-700 space-y-4">
+                        <h3 class="font-bold text-white text-base flex items-center text-purple-400">
+                            <i class="fa-solid fa-bolt mr-2"></i>2. 常用 SQL 語法快捷生成
+                        </h3>
+                        <p class="text-xs text-slate-400">選擇常用的 DML / DDL 操作，快速導入樣板並根據現有表欄位填寫：</p>
+                        
+                        <div class="grid grid-cols-2 gap-3">
+                            <button onclick="generateSnippet('INSERT')" class="p-3 bg-slate-950 hover:bg-slate-800 border border-slate-700 rounded-xl text-left transition">
+                                <div class="font-bold text-xs text-emerald-400">INSERT 新增資料</div>
+                                <div class="text-[10px] text-slate-400 mt-1">往指定資料表寫入新筆數</div>
+                            </button>
+                            <button onclick="generateSnippet('UPDATE')" class="p-3 bg-slate-950 hover:bg-slate-800 border border-slate-700 rounded-xl text-left transition">
+                                <div class="font-bold text-xs text-amber-400">UPDATE 更新欄位</div>
+                                <div class="text-[10px] text-slate-400 mt-1">修正現有資料欄位數值</div>
+                            </button>
+                            <button onclick="generateSnippet('DELETE')" class="p-3 bg-slate-950 hover:bg-slate-800 border border-slate-700 rounded-xl text-left transition">
+                                <div class="font-bold text-xs text-red-400">DELETE 刪除特定列</div>
+                                <div class="text-[10px] text-slate-400 mt-1">依據 WHERE 條件移除紀錄</div>
+                            </button>
+                            <button onclick="generateSnippet('ALTER')" class="p-3 bg-slate-950 hover:bg-slate-800 border border-slate-700 rounded-xl text-left transition">
+                                <div class="font-bold text-xs text-cyan-400">ALTER TABLE 新增欄位</div>
+                                <div class="text-[10px] text-slate-400 mt-1">動態為現有資料表擴充欄位</div>
+                            </button>
+                        </div>
+
+                        <div class="bg-slate-950 p-3 rounded-lg border border-slate-800 text-xs text-slate-400">
+                            <strong class="text-slate-200">提示：</strong> 生成的語法會自動載入 SQL 工作站編輯器，您可以直接修改內容並執行。
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- PART 6: COMPARISON & ANALYSIS -->
+        <section id="sec-comparison" class="tab-content hidden space-y-6">
+            <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700">
+                <div class="mb-6">
+                    <span class="px-3 py-1 rounded-full text-xs font-semibold bg-purple-500/20 text-purple-300 border border-purple-400/30">深入觀念解析</span>
+                    <h2 class="text-xl font-bold text-white mt-2"><i class="fa-solid fa-scale-balanced text-purple-400 mr-2"></i>SQL 語法微調對查詢結果之影響對比</h2>
+                    <p class="text-slate-400 text-sm mt-1">實務上常常因為一個關鍵字（如 JOIN 類別、WHERE 位置或計數函數選擇）而導致資料遺漏或計算錯誤。以下為常見差異對照：</p>
+                </div>
+
+                <!-- Comparison Case 1: INNER JOIN vs LEFT JOIN -->
+                <div class="bg-slate-900 rounded-xl p-6 border border-slate-700 space-y-4 mb-6">
+                    <div class="flex items-center justify-between border-b border-slate-800 pb-3 flex-wrap gap-2">
+                        <h3 class="font-bold text-white text-base text-blue-400">案例 1：INNER JOIN (交集) vs LEFT JOIN (左外連結)</h3>
+                        <span class="text-xs px-2.5 py-1 bg-slate-800 text-slate-300 rounded border border-slate-700">商業目標：檢視會員消費狀況與喚醒潛在顧客</span>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <!-- Query A -->
+                        <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2">
+                            <div class="text-xs font-bold text-emerald-400 flex justify-between">
+                                <span>寫法 A：使用 INNER JOIN</span>
+                                <button onclick="loadCustomSQL(`SELECT users.user_id, users.username, orders.order_id, orders.total_amount FROM users INNER JOIN orders ON users.user_id = orders.user_id;`)" class="text-blue-400 hover:underline">帶入編輯器 <i class="fa-solid fa-arrow-right"></i></button>
+                            </div>
+                            <pre class="bg-slate-900 p-3 rounded text-[11px] font-mono text-slate-300 overflow-x-auto"><code>SELECT users.user_id, users.username, orders.order_id 
+FROM users 
+INNER JOIN orders ON users.user_id = orders.user_id;</code></pre>
+                            <div class="text-xs text-slate-400">
+                                <strong class="text-slate-200">結果特徵：</strong> 僅回傳「至少成立過一次訂單」的會員。未曾消費的會員（如 user_id=5, 6）會被過濾。
+                            </div>
+                        </div>
+
+                        <!-- Query B -->
+                        <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2">
+                            <div class="text-xs font-bold text-amber-400 flex justify-between">
+                                <span>寫法 B：使用 LEFT JOIN</span>
+                                <button onclick="loadCustomSQL(`SELECT users.user_id, users.username, orders.order_id, orders.total_amount FROM users LEFT JOIN orders ON users.user_id = orders.user_id;`)" class="text-blue-400 hover:underline">帶入編輯器 <i class="fa-solid fa-arrow-right"></i></button>
+                            </div>
+                            <pre class="bg-slate-900 p-3 rounded text-[11px] font-mono text-slate-300 overflow-x-auto"><code>SELECT users.user_id, users.username, orders.order_id 
+FROM users 
+LEFT JOIN orders ON users.user_id = orders.user_id;</code></pre>
+                            <div class="text-xs text-slate-400">
+                                <strong class="text-slate-200">結果特徵：</strong> 保留左表 (<code class="text-blue-300">users</code>) 所有會員。未下單者相對應的 <code class="text-amber-300">order_id</code> 欄位會顯示為 <span class="text-red-400 font-mono">NULL</span>。
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Comparison Case 2: WHERE vs HAVING -->
+                <div class="bg-slate-900 rounded-xl p-6 border border-slate-700 space-y-4 mb-6">
+                    <div class="flex items-center justify-between border-b border-slate-800 pb-3 flex-wrap gap-2">
+                        <h3 class="font-bold text-white text-base text-purple-400">案例 2：WHERE (分組前過濾) vs HAVING (分組後聚合過濾)</h3>
+                        <span class="text-xs px-2.5 py-1 bg-slate-800 text-slate-300 rounded border border-slate-700">商業目標：計算已完成訂單的 VIP 大客戶</span>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2">
+                            <div class="text-xs font-bold text-emerald-400 flex justify-between">
+                                <span>正確觀念：WHERE 排除無效單 + HAVING 篩選總額</span>
+                                <button onclick="loadCustomSQL(`SELECT user_id, SUM(total_amount) AS total_spent FROM orders WHERE status = 'Completed' GROUP BY user_id HAVING total_spent > 3000;`)" class="text-blue-400 hover:underline">帶入編輯器 <i class="fa-solid fa-arrow-right"></i></button>
+                            </div>
+                            <pre class="bg-slate-900 p-3 rounded text-[11px] font-mono text-slate-300 overflow-x-auto"><code>SELECT user_id, SUM(total_amount) AS total_spent
+FROM orders
+WHERE status = 'Completed'  -- 1. 先剔除取消/待處理單
+GROUP BY user_id
+HAVING total_spent > 3000;  -- 2. 再針對計算出的總額過濾</code></pre>
+                        </div>
+
+                        <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2">
+                            <div class="text-xs font-bold text-red-400 flex justify-between">
+                                <span>常見錯誤：試圖在 WHERE 中放置聚合函數</span>
+                            </div>
+                            <pre class="bg-slate-900 p-3 rounded text-[11px] font-mono text-slate-300 overflow-x-auto"><code>-- ❌ 錯誤語法示例
+SELECT user_id, SUM(total_amount)
+FROM orders
+WHERE SUM(total_amount) > 3000 -- 錯誤！SQL 語法規則不允許
+GROUP BY user_id;</code></pre>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Comparison Case 3: COUNT(*) vs COUNT(column) -->
+                <div class="bg-slate-900 rounded-xl p-6 border border-slate-700 space-y-4">
+                    <div class="flex items-center justify-between border-b border-slate-800 pb-3 flex-wrap gap-2">
+                        <h3 class="font-bold text-white text-base text-cyan-400">案例 3：COUNT(*) 列數計算 vs COUNT(column) 排除 NULL 計算</h3>
+                        <span class="text-xs px-2.5 py-1 bg-slate-800 text-slate-300 rounded border border-slate-700">商業目標：正確統計會員的實際下單次數</span>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2">
+                            <div class="text-xs font-bold text-emerald-400 flex justify-between">
+                                <span>寫法 A：COUNT(orders.order_id)</span>
+                                <button onclick="loadCustomSQL(`SELECT u.user_id, u.username, COUNT(o.order_id) AS actual_order_count FROM users u LEFT JOIN orders o ON u.user_id = o.user_id GROUP BY u.user_id;`)" class="text-blue-400 hover:underline">帶入編輯器 <i class="fa-solid fa-arrow-right"></i></button>
+                            </div>
+                            <pre class="bg-slate-900 p-3 rounded text-[11px] font-mono text-slate-300 overflow-x-auto"><code>SELECT u.user_id, u.username, 
+       COUNT(o.order_id) AS actual_order_count
+FROM users u
+LEFT JOIN orders o ON u.user_id = o.user_id
+GROUP BY u.user_id;</code></pre>
+                        </div>
+
+                        <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2">
+                            <div class="text-xs font-bold text-amber-400 flex justify-between">
+                                <span>寫法 B：COUNT(*) 誤計算 NULL 列</span>
+                                <button onclick="loadCustomSQL(`SELECT u.user_id, u.username, COUNT(*) AS row_count FROM users u LEFT JOIN orders o ON u.user_id = o.user_id GROUP BY u.user_id;`)" class="text-blue-400 hover:underline">帶入編輯器 <i class="fa-solid fa-arrow-right"></i></button>
+                            </div>
+                            <pre class="bg-slate-900 p-3 rounded text-[11px] font-mono text-slate-300 overflow-x-auto"><code>SELECT u.user_id, u.username, 
+       COUNT(*) AS row_count
+FROM users u
+LEFT JOIN orders o ON u.user_id = o.user_id
+GROUP BY u.user_id;</code></pre>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-slate-800 border-t border-slate-700/60 py-4 text-center text-xs text-slate-400">
+        <p>SQL 互動查詢學習與測試工作站 &copy; 2026 | Powered by SQLite WebAssembly & Chart.js</p>
+    </footer>
+
+    <!-- JavaScript Application Logic -->
+    <script>
+        // Global State Variables
+        let db = null;
+        let lastQueryResult = null;
+        let currentChartInstance = null;
+        let historyLog = [];
+
+        // Built-in Dataset Definitions
+        const builtInDatasets = {
+            ecommerce: `
+                DROP TABLE IF EXISTS order_items;
+                DROP TABLE IF EXISTS orders;
+                DROP TABLE IF EXISTS products;
+                DROP TABLE IF EXISTS users;
+
+                CREATE TABLE users (
+                    user_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    username TEXT NOT NULL,
+                    email TEXT UNIQUE,
+                    member_level TEXT CHECK(member_level IN ('Regular', 'Gold', 'VIP')),
+                    created_at DATE
+                );
+
+                CREATE TABLE products (
+                    product_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    product_name TEXT NOT NULL,
+                    category TEXT,
+                    price REAL NOT NULL,
+                    stock_quantity INTEGER DEFAULT 0
+                );
+
+                CREATE TABLE orders (
+                    order_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER,
+                    order_date DATE,
+                    status TEXT CHECK(status IN ('Completed', 'Pending', 'Cancelled')),
+                    total_amount REAL,
+                    FOREIGN KEY (user_id) REFERENCES users(user_id)
+                );
+
+                CREATE TABLE order_items (
+                    item_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    order_id INTEGER,
+                    product_id INTEGER,
+                    quantity INTEGER,
+                    unit_price REAL,
+                    FOREIGN KEY (order_id) REFERENCES orders(order_id),
+                    FOREIGN KEY (product_id) REFERENCES products(product_id)
+                );
+
+                INSERT INTO users (username, email, member_level, created_at) VALUES
+                ('陳大明', 'chen@example.com', 'VIP', '2023-01-15'),
+                ('林小美', 'lin@example.com', 'Gold', '2023-03-22'),
+                ('張強', 'chang@example.com', 'Regular', '2023-05-10'),
+                ('黃雅婷', 'huang@example.com', 'VIP', '2023-06-01'),
+                ('許哲維', 'hsu@example.com', 'Regular', '2023-08-19'),
+                ('鄭心怡', 'cheng@example.com', 'Regular', '2023-11-04');
+
+                INSERT INTO products (product_name, category, price, stock_quantity) VALUES
+                ('Flagship Phone X', '智慧手機', 32000, 15),
+                ('Wireless Earbuds Pro', '耳機配件', 4500, 50),
+                ('UltraBook Laptop 14"', '筆記型電腦', 42000, 5),
+                ('Mechanical Keyboard', '電腦週邊', 2800, 30),
+                ('4K Monitor 27"', '螢幕顯示器', 12500, 8),
+                ('Fast Charger 65W', '耳機配件', 890, 3);
+
+                INSERT INTO orders (user_id, order_date, status, total_amount) VALUES
+                (1, '2024-01-10', 'Completed', 36500),
+                (2, '2024-01-12', 'Completed', 4500),
+                (1, '2024-02-01', 'Completed', 42000),
+                (3, '2024-02-15', 'Cancelled', 2800),
+                (4, '2024-02-20', 'Completed', 17000),
+                (2, '2024-03-05', 'Pending', 890);
+
+                INSERT INTO order_items (order_id, product_id, quantity, unit_price) VALUES
+                (1, 1, 1, 32000),
+                (1, 2, 1, 4500),
+                (2, 2, 1, 4500),
+                (3, 3, 1, 42000),
+                (4, 4, 1, 2800),
+                (5, 4, 1, 2800),
+                (5, 5, 1, 12500),
+                (6, 6, 1, 890);
+            `,
+            saas: `
+                DROP TABLE IF EXISTS subscriptions;
+                DROP TABLE IF EXISTS plans;
+                DROP TABLE IF EXISTS subscribers;
+
+                CREATE TABLE subscribers (
+                    sub_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    company_name TEXT NOT NULL,
+                    contact_email TEXT,
+                    signup_date DATE
+                );
+
+                CREATE TABLE plans (
+                    plan_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    plan_name TEXT NOT NULL,
+                    monthly_fee REAL NOT NULL,
+                    max_users INTEGER
+                );
+
+                CREATE TABLE subscriptions (
+                    sub_script_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    sub_id INTEGER,
+                    plan_id INTEGER,
+                    start_date DATE,
+                    status TEXT CHECK(status IN ('Active', 'Trial', 'Cancelled')),
+                    FOREIGN KEY (sub_id) REFERENCES subscribers(sub_id),
+                    FOREIGN KEY (plan_id) REFERENCES plans(plan_id)
+                );
+
+                INSERT INTO subscribers (company_name, contact_email, signup_date) VALUES
+                ('TechCorp Inc.', 'admin@techcorp.io', '2023-02-10'),
+                ('Design Studio LLC', 'hello@designstudio.com', '2023-04-15'),
+                ('Global Logistics', 'support@globallog.com', '2023-07-01'),
+                ('Future Startups', 'ceo@future.co', '2023-09-20');
+
+                INSERT INTO plans (plan_name, monthly_fee, max_users) VALUES
+                ('Starter', 49.0, 5),
+                ('Professional', 199.0, 25),
+                ('Enterprise', 599.0, 100);
+
+                INSERT INTO subscriptions (sub_id, plan_id, start_date, status) VALUES
+                (1, 3, '2023-02-10', 'Active'),
+                (2, 2, '2023-04-15', 'Active'),
+                (3, 1, '2023-07-01', 'Cancelled'),
+                (4, 1, '2023-09-20', 'Trial');
+            `,
+            food_delivery: `
+                DROP TABLE IF EXISTS deliveries;
+                DROP TABLE IF EXISTS drivers;
+                DROP TABLE IF EXISTS restaurants;
+
+                CREATE TABLE restaurants (
+                    restaurant_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    cuisine_type TEXT,
+                    rating REAL
+                );
+
+                CREATE TABLE drivers (
+                    driver_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    driver_name TEXT NOT NULL,
+                    vehicle_type TEXT,
+                    rating REAL
+                );
+
+                CREATE TABLE deliveries (
+                    delivery_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    restaurant_id INTEGER,
+                    driver_id INTEGER,
+                    delivery_fee REAL,
+                    order_time DATETIME,
+                    status TEXT CHECK(status IN ('Delivered', 'In Transit', 'Cancelled')),
+                    FOREIGN KEY (restaurant_id) REFERENCES restaurants(restaurant_id),
+                    FOREIGN KEY (driver_id) REFERENCES drivers(driver_id)
+                );
+
+                INSERT INTO restaurants (name, cuisine_type, rating) VALUES
+                ('鼎泰豐', '中式點心', 4.8),
+                ('拉麵公子', '日式拉麵', 4.6),
+                ('麥當勞', '美式速食', 4.2),
+                ('金色三麥', '美式美饌', 4.5);
+
+                INSERT INTO drivers (driver_name, vehicle_type, rating) VALUES
+                ('王志明', 'Gogoro', 4.9),
+                ('李國豪', '機車', 4.7),
+                ('張淑芬', '自行車', 4.5);
+
+                INSERT INTO deliveries (restaurant_id, driver_id, delivery_fee, order_time, status) VALUES
+                (1, 1, 60.0, '2024-03-01 12:30:00', 'Delivered'),
+                (2, 2, 45.0, '2024-03-01 13:10:00', 'Delivered'),
+                (3, 1, 30.0, '2024-03-01 18:20:00', 'Delivered'),
+                (4, 3, 80.0, '2024-03-01 19:00:00', 'Cancelled');
+            `
+        };
+
+        const seedSQL = builtInDatasets.ecommerce;
+
+        // Initialize sql.js Engine
+        async function initDatabase() {
+            const badge = document.getElementById('db-status-badge');
+            try {
+                const SQL = await initSqlJs({
+                    locateFile: file => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/${file}`
+                });
+                db = new SQL.Database();
+                db.run(seedSQL);
+                
+                badge.className = "inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20";
+                badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-400 mr-1.5"></span>SQLite 已就緒`;
+                
+                updateSchemaTree();
+                loadPreset(1);
+            } catch (err) {
+                console.error("Database Init Failed:", err);
+                badge.className = "inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-red-500/10 text-red-400 border border-red-500/20";
+                badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-red-400 mr-1.5"></span>載入失敗`;
+            }
+        }
+
+        // Builtin Dataset Switcher
+        function loadBuiltinDataset(key) {
+            if (!db || !builtInDatasets[key]) return;
+            try {
+                db.run(builtInDatasets[key]);
+                updateSchemaTree();
+                switchTab('workspace');
+                
+                if (key === 'ecommerce') {
+                    loadPreset(1);
+                } else if (key === 'saas') {
+                    loadCustomSQL(`-- SaaS 訂閱與 MRR 營收統計範例\nSELECT \n    p.plan_name AS 訂閱方案,\n    COUNT(s.sub_script_id) AS 有效訂閱數,\n    SUM(p.monthly_fee) AS 預估月經常性收益_MRR\nFROM plans p\nLEFT JOIN subscriptions s ON p.plan_id = s.plan_id AND s.status = 'Active'\nGROUP BY p.plan_id;`);
+                } else if (key === 'food_delivery') {
+                    loadCustomSQL(`-- 外送員運費總收益與外送次數排行榜\nSELECT \n    d.driver_name AS 外送員,\n    COUNT(del.delivery_id) AS 完成外送單數,\n    SUM(del.delivery_fee) AS 累積運費收益\nFROM drivers d\nJOIN deliveries del ON d.driver_id = del.driver_id\nWHERE del.status = 'Delivered'\nGROUP BY d.driver_id\nORDER BY 累積運費收益 DESC;`);
+                }
+                
+                alert(`已成功載入主題資料庫！`);
+            } catch (e) {
+                console.error(e);
+                alert("載入資料庫失敗：" + e.message);
+            }
+        }
+
+        // CSV Importer
+        function importCSVToSQLite() {
+            if (!db) return;
+            const tableName = document.getElementById('csv-table-name').value.trim() || 'custom_csv_table';
+            const fileInput = document.getElementById('csv-file-input');
+            const file = fileInput.files[0];
+
+            if (!file) {
+                alert("請先選擇一個 CSV 檔案！");
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const text = e.target.result;
+                const lines = text.split(/\r\n|\n/).filter(line => line.trim() !== '');
+                if (lines.length === 0) {
+                    alert("CSV 檔案內容為空！");
+                    return;
+                }
+
+                const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, '').replace(/[^a-zA-Z0-9_]/g, '_'));
+                const rows = lines.slice(1).map(line => line.split(',').map(cell => cell.trim().replace(/^"|"$/g, '')));
+
+                try {
+                    db.run(`DROP TABLE IF EXISTS ${tableName};`);
+                    const colDefs = headers.map(h => `${h} TEXT`).join(', ');
+                    db.run(`CREATE TABLE ${tableName} (${colDefs});`);
+
+                    const placeholders = headers.map(() => '?').join(', ');
+                    const stmt = db.prepare(`INSERT INTO ${tableName} VALUES (${placeholders})`);
+
+                    rows.forEach(row => {
+                        if (row.length === headers.length) {
+                            stmt.run(row);
+                        }
+                    });
+                    stmt.free();
+
+                    updateSchemaTree();
+                    switchTab('workspace');
+                    loadCustomSQL(`SELECT * FROM ${tableName} LIMIT 20;`);
+                    alert(`成功建立資料表 [${tableName}] 並導入 ${rows.length} 筆資料！`);
+                } catch (err) {
+                    alert("CSV 匯入失敗：" + err.message);
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        // Synthetic Data Generator
+        function generateSyntheticData() {
+            if (!db) return;
+            try {
+                const res = db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name='users';");
+                if (res.length === 0) {
+                    alert("請切換至 [3C 電商] 主題資料庫後再使用測試數據生成器！");
+                    return;
+                }
+
+                db.run(`
+                    INSERT INTO orders (user_id, order_date, status, total_amount) VALUES
+                    (1, '2024-03-10', 'Completed', 12500),
+                    (2, '2024-03-11', 'Completed', 4500),
+                    (3, '2024-03-12', 'Pending', 890),
+                    (4, '2024-03-14', 'Completed', 32000),
+                    (5, '2024-03-15', 'Cancelled', 2800),
+                    (6, '2024-03-16', 'Completed', 42000);
+                `);
+                
+                executeSQL();
+                alert("已成功注入 6 筆模擬訂單資料！");
+            } catch (err) {
+                alert("生成失敗：" + err.message);
+            }
+        }
+
+        // Full DB Exporter
+        function exportFullDatabaseSQL() {
+            if (!db) return;
+            try {
+                let dumpSQL = "-- SQL Studio Exporter Dump\n-- Generated on " + new Date().toLocaleString() + "\n\n";
+                const tablesRes = db.exec("SELECT name, sql FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';");
+                
+                if (tablesRes.length > 0) {
+                    const tables = tablesRes[0].values;
+                    tables.forEach(table => {
+                        const tableName = table[0];
+                        const createSQL = table[1];
+                        dumpSQL += `DROP TABLE IF EXISTS ${tableName};\n${createSQL};\n\n`;
+                        
+                        const rowsRes = db.exec(`SELECT * FROM ${tableName};`);
+                        if (rowsRes.length > 0) {
+                            const cols = rowsRes[0].columns;
+                            const vals = rowsRes[0].values;
+                            vals.forEach(row => {
+                                const formattedVals = row.map(v => typeof v === 'string' ? `'${v.replace(/'/g, "''")}'` : v === null ? 'NULL' : v);
+                                dumpSQL += `INSERT INTO ${tableName} (${cols.join(', ')}) VALUES (${formattedVals.join(', ')});\n`;
+                            });
+                            dumpSQL += "\n";
+                        }
+                    });
+                }
+
+                const blob = new Blob([dumpSQL], { type: 'text/plain;charset=utf-8' });
+                const link = document.createElement("a");
+                link.href = URL.createObjectURL(blob);
+                link.download = "database_dump.sql";
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            } catch (err) {
+                alert("導出失敗：" + err.message);
+            }
+        }
+
+        function resetDatabase() {
+            if (!db) return;
+            try {
+                db.run(seedSQL);
+                updateSchemaTree();
+                executeSQL();
+                alert("資料庫已成功重置至初始狀態！");
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        // Tab Switching Logic
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.getElementById(`sec-${tabId}`).classList.remove('hidden');
+
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.className = "tab-btn px-3 py-1.5 rounded-lg font-medium transition-all text-slate-400 hover:text-slate-200";
+            });
+            const activeBtn = document.getElementById(`tab-btn-${tabId}`);
+            if (activeBtn) {
+                activeBtn.className = "tab-btn px-3 py-1.5 rounded-lg font-medium transition-all text-blue-400 bg-slate-800 shadow";
+            }
+        }
+
+        // Render Database Schema Sidebar Tree
+        function updateSchemaTree() {
+            if (!db) return;
+            const container = document.getElementById('schema-tree');
+            container.innerHTML = '';
+
+            const tablesRes = db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';");
+            if (tablesRes.length === 0) return;
+
+            const tables = tablesRes[0].values;
+            tables.forEach(tableArr => {
+                const tableName = tableArr[0];
+                const colsRes = db.exec(`PRAGMA table_info(${tableName});`);
+                
+                let colsHTML = '';
+                if (colsRes.length > 0) {
+                    colsRes[0].values.forEach(col => {
+                        const isPk = col[5] === 1;
+                        colsHTML += `<div class="px-2.5 py-1 text-slate-400 flex justify-between items-center text-[11px] hover:bg-slate-800/40 font-mono">
+                            <span class="truncate max-w-[120px]" title="${col[1]}">${isPk ? '🔑 ' : ''}${col[1]}</span>
+                            <span class="text-[9px] text-slate-500 font-mono shrink-0 ml-1">${col[2]}</span>
+                        </div>`;
+                    });
+                }
+
+                const tableBlock = document.createElement('div');
+                tableBlock.className = "border border-slate-700/60 rounded-xl overflow-hidden bg-slate-900/60 shadow-sm";
+                tableBlock.innerHTML = `
+                    <div class="bg-slate-800/90 px-3 py-1.5 font-bold text-slate-200 flex justify-between items-center cursor-pointer hover:bg-slate-700/60 text-xs transition" onclick="insertTableName('${tableName}')" title="點擊貼上表名">
+                        <span class="truncate"><i class="fa-solid fa-table text-blue-400 mr-1.5"></i>${tableName}</span>
+                        <i class="fa-solid fa-plus text-[9px] text-slate-400 bg-slate-700 px-1 py-0.5 rounded"></i>
+                    </div>
+                    <div class="bg-slate-950/40 divide-y divide-slate-800/50">${colsHTML}</div>
+                `;
+                container.appendChild(tableBlock);
+            });
+        }
+
+        function insertTableName(tableName) {
+            const editor = document.getElementById('sql-input');
+            editor.value += ` ${tableName} `;
+            editor.focus();
+        }
+
+        // Preset SQL Loader
+        function loadPreset(id) {
+            const editor = document.getElementById('sql-input');
+            switch (id) {
+                case 1:
+                    editor.value = `-- 1. 統計累積消費金額大於 NT$ 30,000 之 VIP 高貢獻會員\nSELECT \n    users.username AS 會員姓名,\n    SUM(orders.total_amount) AS 累積消費金額\nFROM users\nJOIN orders ON users.user_id = orders.user_id\nWHERE orders.status = 'Completed'\nGROUP BY users.user_id\nHAVING 累積消費金額 >= 30000\nORDER BY 累積消費金額 DESC;`;
+                    break;
+                case 2:
+                    editor.value = `-- 2. 跨表統計熱銷商品總銷售量與總營收排行榜\nSELECT \n    p.product_name AS 商品名稱,\n    SUM(oi.quantity * oi.unit_price) AS 總銷售營收\nFROM products p\nJOIN order_items oi ON p.product_id = oi.product_id\nJOIN orders o ON oi.order_id = o.order_id\nWHERE o.status = 'Completed'\nGROUP BY p.product_id\nORDER BY 總銷售營收 DESC;`;
+                    break;
+                case 3:
+                    editor.value = `-- 3. 檢查剩餘庫存少於 10 件之商品警示清單\nSELECT \n    product_name AS 商品名稱,\n    stock_quantity AS 目前庫存量\nFROM products\nWHERE stock_quantity < 10\nORDER BY stock_quantity ASC;`;
+                    break;
+                case 4:
+                    editor.value = `-- 4. 找出尚未下過任何訂單的零消費新會員 (LEFT JOIN 實作)\nSELECT \n    u.user_id,\n    u.username,\n    u.email,\n    u.created_at\nFROM users u\nLEFT JOIN orders o ON u.user_id = o.user_id\nWHERE o.order_id IS NULL;`;
+                    break;
+                case 5:
+                    editor.value = `-- 5. 統計各會員等級之平均客單價 (AOV - Average Order Value)\nSELECT \n    u.member_level AS 會員等級,\n    ROUND(AVG(o.total_amount), 2) AS 平均客單價\nFROM users u\nJOIN orders o ON u.user_id = o.user_id\nWHERE o.status = 'Completed'\nGROUP BY u.member_level\nORDER BY 平均客單價 DESC;`;
+                    break;
+                case 6:
+                    editor.value = `-- 6. 使用 CASE WHEN 為訂單進行金額階層標籤分類\nSELECT \n    order_id,\n    total_amount,\n    CASE \n        WHEN total_amount >= 30000 THEN '🔥 高單價訂單'\n        WHEN total_amount >= 5000 THEN '👍 中單價訂單'\n        ELSE '🛒 小額一般訂單'\n    END AS 訂單分類標籤\nFROM orders\nORDER BY total_amount DESC;`;
+                    break;
+                case 7:
+                    editor.value = `-- 7. 統計各商品類別之平均售價與產品總個數\nSELECT \n    category AS 商品類別,\n    ROUND(AVG(price), 2) AS 平均單價\nFROM products\nGROUP BY category\nORDER BY 平均單價 DESC;`;
+                    break;
+                case 8:
+                    editor.value = `-- 8. 4 表全聯結：追蹤每一筆明細的會員名稱與品項金額\nSELECT \n    o.order_id,\n    u.username,\n    p.product_name,\n    (oi.quantity * oi.unit_price) AS 小計金額\nFROM orders o\nJOIN users u ON o.user_id = u.user_id\nJOIN order_items oi ON o.order_id = oi.order_id\nJOIN products p ON oi.product_id = p.product_id\nORDER BY o.order_id ASC;`;
+                    break;
+            }
+            executeSQL();
+        }
+
+        function loadCustomSQL(sql) {
+            switchTab('workspace');
+            document.getElementById('sql-input').value = sql;
+            executeSQL();
+        }
+
+        function clearEditor() {
+            document.getElementById('sql-input').value = '';
+            document.getElementById('sql-input').focus();
+        }
+
+        // Smart Linter Hint Generator
+        function analyzeSQLError(sql, errMsg) {
+            const hintBox = document.getElementById('smart-hint-box');
+            const hintText = document.getElementById('smart-hint-text');
+            hintBox.classList.add('hidden');
+
+            const upperSQL = sql.toUpperCase();
+            
+            if (errMsg.includes('misuse of aggregate function') || (upperSQL.includes('WHERE') && (upperSQL.includes('SUM(') || upperSQL.includes('AVG(') || upperSQL.includes('COUNT(')))) {
+                hintText.innerHTML = `檢測到您可能在 <code class="bg-amber-900/60 px-1 rounded text-amber-300">WHERE</code> 子句中使用了聚合函數 (如 SUM/AVG)。<br>💡 <b>語法修正建議：</b> <code class="text-white">WHERE</code> 用於過濾原始資料列；若要針對聚合後的結果進行篩選，請改放在 <code class="text-amber-300">GROUP BY</code> 之後的 <code class="text-emerald-300 font-bold">HAVING</code> 子句中！`;
+                hintBox.classList.remove('hidden');
+                return;
+            }
+
+            if (errMsg.includes('no such table')) {
+                const tableMatch = errMsg.match(/no such table: (\w+)/);
+                const badTable = tableMatch ? tableMatch[1] : '';
+                hintText.innerHTML = `資料庫中不存在名稱為 <code class="bg-red-900/60 px-1 rounded text-red-300">${badTable}</code> 的資料表。<br>💡 <b>語法修正建議：</b> 請參考左側「資料表架構樹」，目前可用資料表包含：<code class="text-blue-300">users, orders, products, order_items</code>。`;
+                hintBox.classList.remove('hidden');
+                return;
+            }
+
+            if (upperSQL.includes('SELECT') && (upperSQL.includes('SUM(') || upperSQL.includes('COUNT(')) && !upperSQL.includes('GROUP BY') && sql.includes(',')) {
+                hintText.innerHTML = `您的語法同時選取了普通欄位與加總函數，但遺漏了 <code class="bg-amber-900/60 px-1 rounded text-amber-300">GROUP BY</code>。<br>💡 <b>語法修正建議：</b> 請加上 <code class="text-emerald-300">GROUP BY [非聚合欄位名]</code>，否則查詢結果會無法精準對齊分類。`;
+                hintBox.classList.remove('hidden');
+                return;
+            }
+
+            if (errMsg.includes('syntax error')) {
+                hintText.innerHTML = `SQL 語法結構有誤，請檢查是否有拼錯關鍵字 (如 SELEC/FORM)、遺漏逗號、單引號未成對合攏，或括號未匹配。`;
+                hintBox.classList.remove('hidden');
+            }
+        }
+
+        // Execute SQL Query
+        function executeSQL() {
+            if (!db) {
+                alert("SQLite 引擎尚未載入完成，請稍候...");
+                return;
+            }
+
+            const sql = document.getElementById('sql-input').value.trim();
+            const placeholder = document.getElementById('result-placeholder');
+            const errorBox = document.getElementById('error-message-box');
+            const errorText = document.getElementById('error-text');
+            const tableContainer = document.getElementById('table-container');
+            const chartContainer = document.getElementById('chart-container');
+            const stats = document.getElementById('execution-stats');
+            const exportBtn = document.getElementById('export-csv-btn');
+            const viewToggleGroup = document.getElementById('view-toggle-group');
+
+            if (!sql) {
+                placeholder.classList.remove('hidden');
+                errorBox.classList.add('hidden');
+                tableContainer.classList.add('hidden');
+                chartContainer.classList.add('hidden');
+                exportBtn.classList.add('hidden');
+                viewToggleGroup.classList.add('hidden');
+                stats.innerText = "請輸入語法";
+                return;
+            }
+
+            const startTime = performance.now();
+
+            try {
+                const results = db.exec(sql);
+                const endTime = performance.now();
+                const executionTime = (endTime - startTime).toFixed(2);
+
+                placeholder.classList.add('hidden');
+                errorBox.classList.add('hidden');
+
+                addHistoryLog(sql, true);
+
+                if (results.length === 0) {
+                    tableContainer.classList.add('hidden');
+                    chartContainer.classList.add('hidden');
+                    exportBtn.classList.add('hidden');
+                    viewToggleGroup.classList.add('hidden');
+                    stats.className = "text-xs text-emerald-400 font-semibold";
+                    stats.innerText = `✅ 指令執行成功 (耗時 ${executionTime} ms, 無返回資料列)`;
+                    updateSchemaTree();
+                    return;
+                }
+
+                lastQueryResult = results[0];
+                const columns = lastQueryResult.columns;
+                const values = lastQueryResult.values;
+
+                const thead = document.getElementById('result-table-head');
+                thead.innerHTML = `<tr>${columns.map(col => `<th class="px-4 py-2.5 font-semibold text-slate-300 border-b border-slate-700 font-mono">${col}</th>`).join('')}</tr>`;
+
+                const tbody = document.getElementById('result-table-body');
+                tbody.innerHTML = values.map(row => {
+                    return `<tr class="hover:bg-slate-800/60 transition border-b border-slate-800/50">${row.map(val => {
+                        if (val === null) return `<td class="px-4 py-2 text-red-400/80 font-mono italic">NULL</td>`;
+                        return `<td class="px-4 py-2 font-mono text-slate-200">${escapeHtml(val.toString())}</td>`;
+                    }).join('')}</tr>`;
+                }).join('');
+
+                tableContainer.classList.remove('hidden');
+                chartContainer.classList.add('hidden');
+                exportBtn.classList.remove('hidden');
+                viewToggleGroup.classList.remove('hidden');
+                
+                toggleResultView('table');
+
+                stats.className = "text-xs text-blue-400 font-semibold";
+                stats.innerText = `查詢成功：共 ${values.length} 筆結果 (耗時 ${executionTime} ms)`;
+
+                renderChartIfPossible(columns, values);
+
+            } catch (err) {
+                console.error(err);
+                placeholder.classList.add('hidden');
+                tableContainer.classList.add('hidden');
+                chartContainer.classList.add('hidden');
+                exportBtn.classList.add('hidden');
+                viewToggleGroup.classList.add('hidden');
+                errorBox.classList.remove('hidden');
+                errorText.innerText = err.message;
+                stats.className = "text-xs text-red-400 font-semibold";
+                stats.innerText = `語法執行錯誤`;
+
+                addHistoryLog(sql, false);
+                analyzeSQLError(sql, err.message);
+            }
+        }
+
+        // Data Visualizer Logic (Chart.js)
+        function renderChartIfPossible(columns, values) {
+            if (currentChartInstance) {
+                currentChartInstance.destroy();
+            }
+
+            if (columns.length < 2 || values.length === 0) return;
+
+            let numColIdx = -1;
+            for (let i = 1; i < columns.length; i++) {
+                if (typeof values[0][i] === 'number') {
+                    numColIdx = i;
+                    break;
+                }
+            }
+
+            if (numColIdx === -1) return;
+
+            const labels = values.map(r => r[0]);
+            const dataValues = values.map(r => r[numColIdx]);
+
+            const ctx = document.getElementById('resultChart').getContext('2d');
+            currentChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: columns[numColIdx],
+                        data: dataValues,
+                        backgroundColor: 'rgba(59, 130, 246, 0.6)',
+                        borderColor: '#3b82f6',
+                        borderWidth: 1.5,
+                        borderRadius: 6,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { labels: { color: '#94a3b8', font: { family: 'JetBrains Mono' } } }
+                    },
+                    scales: {
+                        x: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255,255,255,0.05)' } },
+                        y: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255,255,255,0.05)' } }
+                    }
+                }
+            });
+        }
+
+        function toggleResultView(view) {
+            const tableCont = document.getElementById('table-container');
+            const chartCont = document.getElementById('chart-container');
+            const btnTable = document.getElementById('btn-view-table');
+            const btnChart = document.getElementById('btn-view-chart');
+
+            if (view === 'table') {
+                tableCont.classList.remove('hidden');
+                chartCont.classList.add('hidden');
+                btnTable.className = "px-3 py-1 rounded bg-blue-600 text-white font-medium transition";
+                btnChart.className = "px-3 py-1 rounded text-slate-400 hover:text-slate-200 font-medium transition";
+            } else {
+                tableCont.classList.add('hidden');
+                chartCont.classList.remove('hidden');
+                btnChart.className = "px-3 py-1 rounded bg-blue-600 text-white font-medium transition";
+                btnTable.className = "px-3 py-1 rounded text-slate-400 hover:text-slate-200 font-medium transition";
+            }
+        }
+
+        // History Log Helpers
+        function addHistoryLog(sql, isSuccess) {
+            historyLog.unshift({ sql, isSuccess, time: new Date().toLocaleTimeString() });
+            if (historyLog.length > 8) historyLog.pop();
+
+            const container = document.getElementById('history-list');
+            container.innerHTML = historyLog.map(item => `
+                <div onclick="loadCustomSQL(\`${escapeHtml(item.sql)}\`)" class="p-1.5 rounded bg-slate-900/80 hover:bg-slate-700/70 border border-slate-700/60 cursor-pointer flex justify-between items-center transition group" title="點擊帶入此語法">
+                    <span class="truncate max-w-[140px] ${item.isSuccess ? 'text-slate-300' : 'text-red-400'}">${escapeHtml(item.sql)}</span>
+                    <span class="text-[9px] text-slate-500 shrink-0 ml-1">${item.time}</span>
+                </div>
+            `).join('');
+        }
+
+        function clearHistory() {
+            historyLog = [];
+            document.getElementById('history-list').innerHTML = `<div class="text-slate-500 text-[11px] italic p-1">尚無執行紀錄</div>`;
+        }
+
+        // Builder SQL Generators
+        function generateCreateTableSQL() {
+            const tableName = document.getElementById('builder-table-name').value.trim() || 'my_custom_table';
+            const colNames = document.querySelectorAll('.col-name');
+            const colTypes = document.querySelectorAll('.col-type');
+
+            let colsSQL = [];
+            for (let i = 0; i < colNames.length; i++) {
+                const name = colNames[i].value.trim();
+                const type = colTypes[i].value;
+                if (name) {
+                    colsSQL.push(`    ${name} ${type}`);
+                }
+            }
+
+            const sql = `CREATE TABLE ${tableName} (\n${colsSQL.join(',\n')}\n);`;
+            loadCustomSQL(sql);
+        }
+
+        function generateSnippet(type) {
+            let sql = '';
+            switch(type) {
+                case 'INSERT':
+                    sql = `-- 新增筆數範例\nINSERT INTO products (product_name, category, price, stock_quantity)\nVALUES ('Smart Watch Ultra', '穿戴裝置', 12900, 20);`;
+                    break;
+                case 'UPDATE':
+                    sql = `-- 更新資料範例\nUPDATE products\nSET price = 3990, stock_quantity = 45\nWHERE product_id = 2;`;
+                    break;
+                case 'DELETE':
+                    sql = `-- 刪除資料範例\nDELETE FROM orders\nWHERE status = 'Cancelled';`;
+                    break;
+                case 'ALTER':
+                    sql = `-- 擴充資料表欄位範例\nALTER TABLE users ADD COLUMN phone_number TEXT;`;
+                    break;
+            }
+            loadCustomSQL(sql);
+        }
+
+        // Utility: Export CSV
+        function exportCSV() {
+            if (!lastQueryResult) return;
+            let csvContent = "data:text/csv;charset=utf-8,";
+            csvContent += lastQueryResult.columns.join(",") + "\n";
+            lastQueryResult.values.forEach(row => {
+                csvContent += row.map(v => `"${v}"`).join(",") + "\n";
+            });
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", "sql_query_result.csv");
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function escapeHtml(text) {
+            return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        }
+
+        // Keyboard Shortcut: Ctrl+Enter / Cmd+Enter
+        document.getElementById('sql-input').addEventListener('keydown', function(e) {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                e.preventDefault();
+                executeSQL();
+            }
+        });
+
+        // Initialize App on window load
+        window.onload = function() {
+            initDatabase();
+        };
+    </script>
+</body>
+</html>
