@@ -26,7 +26,7 @@
 
 ```bash
 # 複製專案
-git clone https://github.com/your-username/sql-studio.git
+git clone https://github.com/KaLuwei/sql-studio.git
 
 # 直接使用瀏覽器開啟 index.html 即可運行
 ```
